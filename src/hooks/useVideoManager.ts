@@ -28,7 +28,7 @@ function getSafeFilename(name: string, url: string): string {
   const lastPart = urlParts[urlParts.length - 1] || '';
   const extParts = lastPart.split('.');
   const ext = extParts.length > 1 ? `.${extParts[extParts.length - 1].split('?')[0]}` : '.mp4';
-  
+
   const cleanName = name.replace(/[^a-zA-Z0-9ก-๙เ-็่-๊ํ๎๏๚]/g, '_');
   return `${cleanName}_${hashCode(url)}${ext}`;
 }
@@ -37,8 +37,25 @@ export function useVideoManager() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [isServerReachable, setIsServerReachable] = useState(false);
+  
   const downloadingRefs = useRef<Set<string>>(new Set());
   const loadingBlobsRef = useRef<Set<string>>(new Set());
+
+  // Track network online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // 1. Load cached videos list on mount and verify that local files exist
   useEffect(() => {
@@ -46,7 +63,7 @@ export function useVideoManager() {
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as VideoItem[];
-        
+
         const verifyCachedFiles = async () => {
           const verified = await Promise.all(
             parsed.map(async v => {
@@ -66,7 +83,7 @@ export function useVideoManager() {
           );
           setVideos(verified);
         };
-        
+
         verifyCachedFiles();
       } catch (e) {
         console.error('Failed to parse cached videos:', e);
@@ -81,6 +98,8 @@ export function useVideoManager() {
       const response = await fetch('http://10.1.60.222:3000/api/videos');
       if (!response.ok) throw new Error('Failed to fetch videos from API');
       const data = await response.json();
+
+      setIsServerReachable(true);
 
       const apiVideos = (data.videos || []).map((v: { name: string; url: string; download_url: string }) => ({
         name: v.name,
@@ -109,6 +128,7 @@ export function useVideoManager() {
       });
     } catch (err) {
       console.error('Error fetching API:', err);
+      setIsServerReachable(false);
     } finally {
       setIsLoading(false);
     }
@@ -121,14 +141,17 @@ export function useVideoManager() {
     return () => clearInterval(interval);
   }, []);
 
-  // 3. Background download for undownloaded videos (Works on all platforms now!)
+  // 3. Background download for undownloaded videos
   useEffect(() => {
+    // Only attempt downloads when online and the server is reachable
+    if (!isOnline || !isServerReachable) return;
+
     videos.forEach(video => {
       if (!video.is_downloaded && !downloadingRefs.current.has(video.stream_url)) {
         downloadingRefs.current.add(video.stream_url);
-        
+
         const filename = getSafeFilename(video.name, video.stream_url);
-        
+
         invoke<string>('download_video', { url: video.stream_url, filename })
           .then(localPath => {
             console.log(`Successfully cached ${video.name} to ${localPath}`);
@@ -151,7 +174,7 @@ export function useVideoManager() {
           });
       }
     });
-  }, [videos]);
+  }, [videos, isOnline, isServerReachable]);
 
   // 3b. [Android Only] Load downloaded video files into memory Blobs on-demand
   useEffect(() => {
@@ -160,15 +183,15 @@ export function useVideoManager() {
     videos.forEach(video => {
       if (video.is_downloaded && !blobUrls[video.stream_url] && !loadingBlobsRef.current.has(video.stream_url)) {
         loadingBlobsRef.current.add(video.stream_url);
-        
+
         const filename = getSafeFilename(video.name, video.stream_url);
-        
+
         invoke<number[]>('read_video_file', { filename })
           .then(bytes => {
             const uint8 = new Uint8Array(bytes);
             const blob = new Blob([uint8], { type: 'video/mp4' });
             const blobUrl = URL.createObjectURL(blob);
-            
+
             console.log(`Successfully generated Blob URL for ${video.name}: ${blobUrl}`);
             setBlobUrls(prev => ({
               ...prev,
@@ -188,12 +211,12 @@ export function useVideoManager() {
   // 3c. Clean up unused Blob URLs when videos list changes to avoid memory leaks
   useEffect(() => {
     if (!isAndroid) return;
-    
+
     const activeUrls = new Set(videos.map(v => v.stream_url));
     setBlobUrls(prev => {
       const next = { ...prev };
       let changed = false;
-      
+ 
       Object.keys(next).forEach(urlKey => {
         if (!activeUrls.has(urlKey)) {
           URL.revokeObjectURL(next[urlKey]);
@@ -202,7 +225,7 @@ export function useVideoManager() {
           console.log(`Revoked unused Blob URL for ${urlKey}`);
         }
       });
-      
+
       return changed ? next : prev;
     });
   }, [videos]);
@@ -223,7 +246,16 @@ export function useVideoManager() {
 
   // 4. Return play URLs (converted to local asset URL or Blob URL if downloaded, otherwise fallback to remote)
   const streamUrls = useMemo(() => {
-    return videos.map(v => {
+    // If offline or the server is down/unreachable, filter to ONLY show downloaded videos
+    // to prevent the player trying to load unreachable remote URLs
+    const playableVideos = videos.filter(v => {
+      if (!isOnline || !isServerReachable) {
+        return v.is_downloaded && v.local_path;
+      }
+      return true;
+    });
+
+    return playableVideos.map(v => {
       if (v.is_downloaded) {
         if (isAndroid) {
           return blobUrls[v.stream_url] || v.stream_url;
@@ -233,7 +265,7 @@ export function useVideoManager() {
       }
       return v.stream_url;
     });
-  }, [videos, blobUrls]);
+  }, [videos, blobUrls, isOnline, isServerReachable]);
 
-  return { streamUrls, videos, isLoading };
+  return { streamUrls, videos, isLoading, isOnline, isServerReachable };
 }
