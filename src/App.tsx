@@ -5,11 +5,12 @@ import "./App.css";
 
 // ─── Queue rows (placeholder data – replace with real API if needed) ───────────
 const QUEUE_ROWS = [
-  { counter: "01", ticket: "A001" },
-  { counter: "02", ticket: "A015" },
-  { counter: "03", ticket: "B003" },
-  { counter: "04", ticket: "A022" },
-  { counter: "05", ticket: "C007" },
+  { counter: "1", ticket: "A001" },
+  { counter: "2", ticket: "A015" },
+  { counter: "3", ticket: "B003" },
+  { counter: "4", ticket: "A022" },
+  { counter: "5", ticket: "C007" },
+  { counter: "6", ticket: "D099" },
 ];
 
 // ─── Date / Time helpers ───────────────────────────────────────────────────────
@@ -43,50 +44,70 @@ function App() {
   }, []);
 
   return (
-    <div className="kiosk-root">
+    <div className="w-screen h-screen bg-[#F5F5F5] flex flex-col p-8 relative overflow-hidden font-['LINESeedSansTH']">
+
       {/* ── Header ── */}
-      <header className="kiosk-header">
-        <div className="header-brand">
-          <div className="logo-circle">
-            <span className="logo-text">กทม</span>
-          </div>
-          <span className="brand-name">กทม</span>
+      <header className="flex w-full mb-6 items-end">
+        {/* Brand (Left) */}
+        <div className="w-[55%] flex items-center gap-4 pl-2">
+          {/* <div className="w-20 h-20 rounded-full border-[3px] border-[#0f7649] flex items-center justify-center bg-white shadow-sm overflow-hidden">
+            <svg viewBox="0 0 100 100" className="w-12 h-12 text-[#0f7649] fill-current">
+              <path d="M50 15 L85 85 L15 85 Z" fill="none" stroke="currentColor" strokeWidth="8" strokeLinejoin="round" />
+              <circle cx="50" cy="60" r="10" />
+            </svg>
+          </div> */}
+          <h1 className="text-7xl font-extrabold text-[#0f7649] tracking-tight pt-2">กทม</h1>
         </div>
-        <div className="header-cols">
-          <span className="col-label">ช่องบริการ</span>
-          <span className="col-label">หมายเลขคิว</span>
+
+        {/* Columns Labels (Right) */}
+        <div className="w-[45%] flex gap-3">
+          <div className="w-[35%] text-center text-3xl font-bold text-gray-800">ช่องบริการ</div>
+          <div className="w-[65%] text-center text-3xl font-bold text-gray-800">หมายเลขคิว</div>
         </div>
       </header>
 
       {/* ── Body ── */}
-      <div className="kiosk-body">
+      <main className="flex w-full flex-1 gap-8">
+
         {/* Left: video + clock */}
-        <section className="left-panel">
-          <div className="video-area">
+        <section className="w-[55%] flex flex-col">
+          {/* Video Area */}
+          <div className="w-full bg-black rounded-3xl shadow-xl aspect-video overflow-hidden relative border-4 border-black">
             <VideoPlayer urls={streamUrls} />
           </div>
-          <div className="clock-area">
-            <div className="clock-date">{formatThaiDate(now)}</div>
-            <div className="clock-time">{formatTime(now)}</div>
+
+          {/* Clock Area */}
+          <div className="flex-1 flex flex-col items-center justify-center mt-4">
+            <div className="text-4xl font-bold text-gray-800 mb-2">{formatThaiDate(now)}</div>
+            <div className="text-[6.5rem] leading-none font-extrabold text-black tracking-widest">{formatTime(now)}</div>
           </div>
         </section>
 
         {/* Right: queue table */}
-        <section className="right-panel">
-          {QUEUE_ROWS.map((row) => (
-            <div className="queue-row" key={row.counter}>
-              <div className="queue-cell counter">{row.counter}</div>
-              <div className="queue-cell ticket">{row.ticket}</div>
+        <section className="w-[45%] flex flex-col gap-4 pb-12">
+          {QUEUE_ROWS.map((row, index) => (
+            <div key={index} className="flex flex-1 gap-3">
+              {/* Counter Cell */}
+              <div className="w-[35%] bg-white rounded-2xl shadow-sm border border-gray-200 flex items-center justify-center text-5xl font-bold text-gray-800">
+                {row.counter}
+              </div>
+              {/* Ticket Cell */}
+              <div className="w-[65%] bg-[#087754] rounded-2xl shadow-md flex items-center justify-center text-7xl font-bold text-white tracking-widest">
+                {row.ticket}
+              </div>
             </div>
           ))}
         </section>
-      </div>
+
+      </main>
 
       {/* ── Footer / Status ── */}
-      <footer className="kiosk-footer">
-        <span className="status-dot online" />
-        <span className="status-label">ออนไลน์</span>
+      <footer className="absolute bottom-6 left-8 flex items-center gap-2 text-xl font-bold">
+        <span className="text-gray-800 text-base mr-1">สถานะ</span>
+        <span className="w-3.5 h-3.5 rounded-full bg-[#087754] shadow-[0_0_8px_rgba(8,119,84,0.6)]"></span>
+        <span className="text-[#087754]">ปกติ</span>
       </footer>
+
     </div>
   );
 }

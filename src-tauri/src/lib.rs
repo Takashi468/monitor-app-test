@@ -20,17 +20,23 @@ async fn download_video(app: tauri::AppHandle, url: String, filename: String) ->
     
     let file_path = app_data_dir.join(&filename);
     
-    // If file already exists, skip download
-    if file_path.exists() {
+    // If file already exists and is not empty, skip download
+    if file_path.exists() && file_path.metadata().map(|m| m.len() > 0).unwrap_or(false) {
         return Ok(file_path.to_string_lossy().into_owned());
     }
+
+    let tmp_filename = format!("{}.tmp", filename);
+    let tmp_path = app_data_dir.join(&tmp_filename);
 
     // Download the video
     let response = reqwest::get(&url).await.map_err(|e| e.to_string())?;
     let bytes = response.bytes().await.map_err(|e| e.to_string())?;
     
-    let mut file = fs::File::create(&file_path).map_err(|e| e.to_string())?;
+    let mut file = fs::File::create(&tmp_path).map_err(|e| e.to_string())?;
     file.write_all(&bytes).map_err(|e| e.to_string())?;
+    
+    // Rename temp file to target file atomically
+    fs::rename(&tmp_path, &file_path).map_err(|e| e.to_string())?;
     
     Ok(file_path.to_string_lossy().into_owned())
 }
@@ -40,7 +46,7 @@ fn get_cached_video_path(app: tauri::AppHandle, filename: String) -> Result<Opti
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let file_path = app_data_dir.join(&filename);
     
-    if file_path.exists() {
+    if file_path.exists() && file_path.metadata().map(|m| m.len() > 0).unwrap_or(false) {
         Ok(Some(file_path.to_string_lossy().into_owned()))
     } else {
         Ok(None)
