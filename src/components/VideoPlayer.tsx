@@ -7,7 +7,16 @@ interface VideoPlayerProps {
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({ urls }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [hasFirstPlayStarted, setHasFirstPlayStarted] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Reset the first play state if the playlist becomes empty
+  useEffect(() => {
+    if (urls.length === 0) {
+      setHasFirstPlayStarted(false);
+      setIsPlaying(false);
+    }
+  }, [urls]);
 
   // Switch to next video in the playlist (loop back to 0)
   const playNext = useCallback(() => {
@@ -39,6 +48,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ urls }) => {
     const handlePlaying = () => {
       hasStarted = true;
       setIsPlaying(true);
+      setHasFirstPlayStarted(true);
     };
 
     video.addEventListener('playing', handlePlaying);
@@ -91,10 +101,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ urls }) => {
     );
   }
 
+  const showVideo = isPlaying || hasFirstPlayStarted;
+
   return (
     <div className="relative w-full h-full bg-black overflow-hidden rounded-3xl">
-      {/* Pure Black Connecting Overlay */}
-      {!isPlaying && (
+      {/* Pure Black Connecting Overlay - Only shown on initial startup load */}
+      {!hasFirstPlayStarted && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10">
           <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin mb-4" />
           <span className="text-white/60 text-lg font-light tracking-[0.2em] uppercase">connecting</span>
@@ -111,12 +123,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ urls }) => {
         poster="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
         className="object-cover block transition-opacity duration-500 ease-in-out"
         style={{
-          opacity: isPlaying ? 1 : 0,
-          width: isPlaying ? '100%' : '1px',
-          height: isPlaying ? '100%' : '1px',
-          position: isPlaying ? 'relative' : 'absolute',
-          top: isPlaying ? 'auto' : '-9999px',
-          left: isPlaying ? 'auto' : '-9999px',
+          opacity: showVideo ? 1 : 0,
+          width: showVideo ? '100%' : '1px',
+          height: showVideo ? '100%' : '1px',
+          position: showVideo ? 'relative' : 'absolute',
+          top: showVideo ? 'auto' : '-9999px',
+          left: showVideo ? 'auto' : '-9999px',
         }}
       />
     </div>
