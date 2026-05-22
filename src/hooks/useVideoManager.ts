@@ -36,11 +36,12 @@ function getSafeFilename(name: string, url: string): string {
 export function useVideoManager() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const downloadingRefs = useRef<Set<string>>(new Set());
+  const loadingBlobsRef = useRef<Set<string>>(new Set());
 
-  // 1. Load cached videos list on mount and verify that local files exist (Skip on Android)
+  // 1. Load cached videos list on mount and verify that local files exist
   useEffect(() => {
-    if (isAndroid) return;
     const cached = localStorage.getItem('cached_videos');
     if (cached) {
       try {
@@ -87,11 +88,6 @@ export function useVideoManager() {
         stream_url: v.download_url,
       }));
 
-      if (isAndroid) {
-        setVideos(apiVideos.map((v: any) => ({ ...v, is_downloaded: false })));
-        return;
-      }
-
       setVideos(prevVideos => {
         const merged = apiVideos.map((apiVid: { name: string; url: string; stream_url: string }) => {
           const cachedVid = prevVideos.find(p => p.stream_url === apiVid.stream_url || p.name === apiVid.name);
@@ -125,9 +121,8 @@ export function useVideoManager() {
     return () => clearInterval(interval);
   }, []);
 
-  // 3. Background download for undownloaded videos (Skip on Android)
+  // 3. Background download for undownloaded videos (Works on all platforms now!)
   useEffect(() => {
-    if (isAndroid) return;
     videos.forEach(video => {
       if (!video.is_downloaded && !downloadingRefs.current.has(video.stream_url)) {
         downloadingRefs.current.add(video.stream_url);
@@ -158,18 +153,87 @@ export function useVideoManager() {
     });
   }, [videos]);
 
-  // 4. Return play URLs (converted to local asset URL if downloaded, otherwise fallback to remote)
+  // 3b. [Android Only] Load downloaded video files into memory Blobs on-demand
+  useEffect(() => {
+    if (!isAndroid) return;
+
+    videos.forEach(video => {
+      if (video.is_downloaded && !blobUrls[video.stream_url] && !loadingBlobsRef.current.has(video.stream_url)) {
+        loadingBlobsRef.current.add(video.stream_url);
+        
+        const filename = getSafeFilename(video.name, video.stream_url);
+        
+        invoke<number[]>('read_video_file', { filename })
+          .then(bytes => {
+            const uint8 = new Uint8Array(bytes);
+            const blob = new Blob([uint8], { type: 'video/mp4' });
+            const blobUrl = URL.createObjectURL(blob);
+            
+            console.log(`Successfully generated Blob URL for ${video.name}: ${blobUrl}`);
+            setBlobUrls(prev => ({
+              ...prev,
+              [video.stream_url]: blobUrl
+            }));
+          })
+          .catch(err => {
+            console.error(`Failed to load Blob for ${video.name}:`, err);
+          })
+          .finally(() => {
+            loadingBlobsRef.current.delete(video.stream_url);
+          });
+      }
+    });
+  }, [videos, blobUrls]);
+
+  // 3c. Clean up unused Blob URLs when videos list changes to avoid memory leaks
+  useEffect(() => {
+    if (!isAndroid) return;
+    
+    const activeUrls = new Set(videos.map(v => v.stream_url));
+    setBlobUrls(prev => {
+      const next = { ...prev };
+      let changed = false;
+      
+      Object.keys(next).forEach(urlKey => {
+        if (!activeUrls.has(urlKey)) {
+          URL.revokeObjectURL(next[urlKey]);
+          delete next[urlKey];
+          changed = true;
+          console.log(`Revoked unused Blob URL for ${urlKey}`);
+        }
+      });
+      
+      return changed ? next : prev;
+    });
+  }, [videos]);
+
+  // 3d. Revoke all Blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (!isAndroid) return;
+      setBlobUrls(prev => {
+        Object.values(prev).forEach(url => {
+          URL.revokeObjectURL(url);
+          console.log(`Revoked Blob URL on unmount: ${url}`);
+        });
+        return {};
+      });
+    };
+  }, []);
+
+  // 4. Return play URLs (converted to local asset URL or Blob URL if downloaded, otherwise fallback to remote)
   const streamUrls = useMemo(() => {
     return videos.map(v => {
-      if (isAndroid) {
-        return v.url; // Use streaming URL directly on Android
-      }
-      if (v.is_downloaded && v.local_path) {
-        return convertFileSrc(v.local_path);
+      if (v.is_downloaded) {
+        if (isAndroid) {
+          return blobUrls[v.stream_url] || v.stream_url;
+        } else if (v.local_path) {
+          return convertFileSrc(v.local_path);
+        }
       }
       return v.stream_url;
     });
-  }, [videos]);
+  }, [videos, blobUrls]);
 
   return { streamUrls, videos, isLoading };
 }

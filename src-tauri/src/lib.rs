@@ -53,6 +53,19 @@ fn get_cached_video_path(app: tauri::AppHandle, filename: String) -> Result<Opti
     }
 }
 
+#[tauri::command]
+async fn read_video_file(app: tauri::AppHandle, filename: String) -> Result<Vec<u8>, String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let file_path = app_data_dir.join(&filename);
+    
+    if !file_path.exists() {
+        return Err("File does not exist".to_string());
+    }
+    
+    let bytes = fs::read(&file_path).map_err(|e| e.to_string())?;
+    Ok(bytes)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -60,7 +73,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             download_video,
-            get_cached_video_path
+            get_cached_video_path,
+            read_video_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
