@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useVideoManager } from "./hooks/useVideoManager";
 import { VideoPlayer } from "./components/VideoPlayer";
+import { DebugPanel } from "./components/DebugPanel";
 import "./App.css";
 import packageJson from "../package.json";
 
@@ -39,7 +40,7 @@ function App() {
   const [apiBaseUrl, setApiBaseUrl] = useState(() => {
     return localStorage.getItem("api_base_url") || "http://10.1.60.222:3000";
   });
-  const { streamUrls, isServerReachable } = useVideoManager(apiBaseUrl);
+  const { streamUrls, isServerReachable, isOnline } = useVideoManager(apiBaseUrl);
   const [now, setNow] = useState(new Date());
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -244,6 +245,8 @@ function App() {
         </div>
       )}
 
+      {/* ── Debug Panel ── */}
+      <DebugPanel videoState={{ streamUrls, videoServerPort: null, isOnline, isServerReachable }} />
     </div>
   );
 }
