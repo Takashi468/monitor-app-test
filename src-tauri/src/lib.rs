@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::Write;
 use tauri::Manager;
+use futures_util::StreamExt;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -28,12 +29,15 @@ async fn download_video(app: tauri::AppHandle, url: String, filename: String) ->
     let tmp_filename = format!("{}.tmp", filename);
     let tmp_path = app_data_dir.join(&tmp_filename);
 
-    // Download the video
+    // Download the video in chunks using bytes_stream to keep RAM footprint minimal
     let response = reqwest::get(&url).await.map_err(|e| e.to_string())?;
-    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    let mut stream = response.bytes_stream();
     
     let mut file = fs::File::create(&tmp_path).map_err(|e| e.to_string())?;
-    file.write_all(&bytes).map_err(|e| e.to_string())?;
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = chunk_result.map_err(|e| e.to_string())?;
+        file.write_all(&chunk).map_err(|e| e.to_string())?;
+    }
     
     // Rename temp file to target file atomically
     fs::rename(&tmp_path, &file_path).map_err(|e| e.to_string())?;

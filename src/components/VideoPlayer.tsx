@@ -53,14 +53,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ urls }) => {
 
     video.addEventListener('playing', handlePlaying);
 
-    // Watchdog timeout: skip if the video doesn't fire 'playing' within 2 seconds
+    // Watchdog timeout: skip if the video doesn't fire 'playing' within 10 seconds
     // This is crucial for offline/unreachable remote video timeouts
     const timeoutId = setTimeout(() => {
       if (!hasStarted) {
-        console.warn(`Video playback timeout (2s) for: ${urls[currentIndex]}. Skipping to next.`);
+        console.warn(`Video playback timeout (10s) for: ${urls[currentIndex]}. Skipping to next.`);
         playNext();
       }
-    }, 2000);
+    }, 10000);
 
     video.play().catch(() => {
       // Retry once after a short delay if initial autoplay was blocked
@@ -82,6 +82,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ urls }) => {
       clearTimeout(timeoutId);
       if (video) {
         video.removeEventListener('playing', handlePlaying);
+        video.pause();
+        video.removeAttribute('src');
+        try {
+          video.load();
+        } catch (e) {
+          // ignore
+        }
       }
     };
   }, [currentIndex, urls, playNext]);
