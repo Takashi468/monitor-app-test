@@ -35,6 +35,22 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ urls }) => {
     }
   }, [urls]);
 
+  // Release GPU and media decoder memory only on player unmount to prevent leaks
+  useEffect(() => {
+    return () => {
+      const video = videoRef.current;
+      if (video) {
+        video.pause();
+        video.removeAttribute('src');
+        try {
+          video.load();
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video || urls.length === 0) return;
@@ -82,13 +98,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ urls }) => {
       clearTimeout(timeoutId);
       if (video) {
         video.removeEventListener('playing', handlePlaying);
-        video.pause();
-        video.removeAttribute('src');
-        try {
-          video.load();
-        } catch (e) {
-          // ignore
-        }
       }
     };
   }, [currentIndex, urls, playNext]);

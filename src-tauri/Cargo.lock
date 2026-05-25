@@ -2166,7 +2166,7 @@ dependencies = [
 
 [[package]]
 name = "monitor_test_2"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "futures-util",
  "reqwest",
