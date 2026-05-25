@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 
 const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
@@ -33,7 +33,7 @@ function getSafeFilename(name: string, url: string): string {
   return `${cleanName}_${hashCode(url)}${ext}`;
 }
 
-export function useVideoManager() {
+export function useVideoManager(apiBaseUrl: string) {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
@@ -92,10 +92,10 @@ export function useVideoManager() {
   }, []);
 
   // 2. Fetch videos from API
-  const fetchVideos = async () => {
+  const fetchVideos = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('http://10.1.60.222:3000/api/videos');
+      const response = await fetch(`${apiBaseUrl}/api/videos`);
       if (!response.ok) throw new Error('Failed to fetch videos from API');
       const data = await response.json();
 
@@ -132,14 +132,14 @@ export function useVideoManager() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     fetchVideos();
     // Re-fetch every 10 minutes to pick up new/removed videos
     const interval = setInterval(fetchVideos, 10 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchVideos]);
 
   // 3. Background download for undownloaded videos
   useEffect(() => {
